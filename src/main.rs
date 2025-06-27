@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use flate2::read::ZlibDecoder;
 use std::ffi::CStr;
-use std::fs;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read};
+use std::{fs};
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -47,6 +47,12 @@ fn main() -> Result<()> {
             pretty_print,
             object_hash,
         } => {
+            anyhow::ensure!(pretty_print, "-p must  be added");
+            let f = fs::File::open(format!(
+                ".git/objects/{}/{}",
+                &object_hash[..2],
+                &object_hash[2..]
+            ));
             let f = fs::File::open(format!(
                 ".git/objects/{}/{}",
                 &object_hash[..2],
@@ -76,27 +82,19 @@ fn main() -> Result<()> {
             };
 
             let size = size
-                .parse::<usize>()
+                .parse::<u64>()
                 .context(".git/objects file has invalid size")?;
-
-            buf.clear();
-            buf.resize(size, 0);
-            z.read_exact(&mut buf[..])
-                .context("reading the actual contents of .git/objects file ")?;
-
-            let n = z
-                .read(&mut [0])
-                .context("Validate  EOF in .git/objects file")?;
-
-            anyhow::ensure!(n == 0, ".git/objects file had {n} trailing bytes");
 
             let stdout = std::io::stdout();
             let mut stdout = stdout.lock();
+            // NOTE: This will not return an error if file length exceeds size 
+            let mut z = z.take(size);
             match kind {
                 Kind::Blob => {
-                    stdout
-                        .write_all(&buf)
-                        .context("Writes all the content to the stdout")?;
+                    let n = std::io::copy(&mut z, &mut stdout)
+                        .context("write .git/objects to stdout")?;
+
+                    anyhow::ensure!(n == size, ".git.objects file size not as expected")
                 }
             }
         }
