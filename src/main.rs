@@ -1,13 +1,10 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use flate2::read::ZlibDecoder;
-use flate2::write::ZlibEncoder;
-use flate2::Compression;
-use sha1::{Digest, Sha1};
-use std::ffi::CStr;
 use std::fs;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+
+pub(crate) mod commands;
+pub(crate) mod objects;
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -33,10 +30,10 @@ enum Command {
 
         file: PathBuf,
     },
-}
-
-enum Kind {
-    Blob,
+    LsTree {
+        #[clap(long)]
+        name_only: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -57,118 +54,14 @@ fn main() -> Result<()> {
         Command::CatFile {
             pretty_print,
             object_hash,
-        } => {
-            anyhow::ensure!(pretty_print, "-p must  be added");
-
-            let f = fs::File::open(format!(
-                ".git/objects/{}/{}",
-                &object_hash[..2],
-                &object_hash[2..]
-            ))
-            .context("Read object file from .git/objects")?;
-            let z = ZlibDecoder::new(f);
-            let mut z = BufReader::new(z);
-            let mut buf = Vec::new();
-            z.read_until(0, &mut buf)
-                .context("Read header from file in .git/objects")?;
-
-            let header = CStr::from_bytes_with_nul(&buf)
-                .expect("There should exactly be one null and that at the end");
-
-            let header = header
-                .to_str()
-                .context("Header in .git/objects is not valid UTF-8")?;
-
-            let Some((kind, size)) = header.split_once(" ") else {
-                anyhow::bail!(".git/objects file did not start with 'blob ' :  {header}")
-            };
-
-            let kind = match kind {
-                "blob" => Kind::Blob,
-                _ => anyhow::bail!("Not handling that kind yet: {kind }"),
-            };
-
-            let size = size
-                .parse::<u64>()
-                .context(".git/objects file has invalid size")?;
-
-            let stdout = std::io::stdout();
-            let mut stdout = stdout.lock();
-            // NOTE: This will not return an error if file length exceeds size
-            let mut z = z.take(size);
-            match kind {
-                Kind::Blob => {
-                    let n = std::io::copy(&mut z, &mut stdout)
-                        .context("write .git/objects to stdout")?;
-
-                    anyhow::ensure!(n == size, ".git.objects file size not as expected")
-                }
-            }
-        }
+        } => commands::cat_file::cat_file_invoke(&object_hash, pretty_print)?,
         Command::HashObject { write, file } => {
-            fn write_blob<W>(file: &Path, writer: W) -> anyhow::Result<String>
-            where
-                W: Write,
-            {
-                let stat =
-                    std::fs::metadata(&file).with_context(|| format!("stat {}", file.display()))?;
-                let writer = ZlibEncoder::new(writer, Compression::default());
+            commands::hash_object::hash_object_invoke(write, &file)?;
+        }
+        Command::LsTree { name_only } => {
+            commands::ls_tree::ls_tree_invoke(name_only);
 
-                let mut writer = HashWriter {
-                    writer,
-                    hasher: Sha1::new(),
-                };
-
-                write!(writer, "blob ")?;
-
-                write!(writer, "{}\0", stat.len())?;
-                let mut file = std::fs::File::open(&file)
-                    .with_context(|| format!("open {}", file.display()))?;
-
-                std::io::copy(&mut file, &mut writer).context("stream file into blob ")?;
-                let _ = writer.writer.finish()?;
-                let hash = writer.hasher.finalize();
-
-                Ok(hex::encode(hash))
-            }
-
-            let hash = if write {
-                let tmp = "temporary";
-                let hash = write_blob(
-                    &file,
-                    std::fs::File::create(tmp).context("construct temp file or blob")?,
-                )
-                .context("write out blob object")?;
-                fs::create_dir_all(format!(".git/objects/{}/", &hash[..2]))
-                    .context("create subdir of git objects")?;
-                fs::rename(tmp, format!(".git/objects/{}/{}", &hash[..2], &hash[2..]))
-                    .context("renaming temp file to actual hashed name")?;
-                hash
-            } else {
-                write_blob(&file, std::io::sink()).context("write out blob object")?
-            };
-            println!("{hash}");
         }
     }
     Ok(())
-}
-
-struct HashWriter<W> {
-    writer: W,
-    hasher: Sha1,
-}
-
-impl<W> Write for HashWriter<W>
-where
-    W: Write,
-{
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let n = self.writer.write(buf)?;
-        self.hasher.update(&buf[..n]);
-        Ok(n)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.writer.flush()
-    }
 }
