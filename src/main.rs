@@ -33,6 +33,19 @@ enum Command {
     LsTree {
         #[clap(long)]
         name_only: bool,
+
+        tree_hash: String,
+    },
+    WriteTree {},
+
+    CommitTree {
+        tree_hash: String,
+
+        #[clap(short = 'p')]
+        parent: Option<String>,
+
+        #[clap(short = 'm')]
+        message: String,
     },
 }
 
@@ -58,9 +71,18 @@ fn main() -> Result<()> {
         Command::HashObject { write, file } => {
             commands::hash_object::hash_object_invoke(write, &file)?;
         }
-        Command::LsTree { name_only } => {
-            commands::ls_tree::ls_tree_invoke(name_only);
+        Command::LsTree {
+            name_only,
+            tree_hash,
+        } => {
+            commands::ls_tree::ls_tree_invoke(name_only, &tree_hash)?;
+        }
+        Command::WriteTree {} => {
+            commands::write_tree::write_tree_invoke()?;
+        }
 
+        Command::CommitTree { tree_hash, parent, message } => {
+            commands::commit_tree::commit_tree_invoke( &tree_hash, parent.as_deref(), &message )?;
         }
     }
     Ok(())
