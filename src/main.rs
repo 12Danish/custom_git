@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 
 pub(crate) mod commands;
@@ -47,13 +48,17 @@ enum Command {
         #[clap(short = 'm')]
         message: String,
     },
+
+    CheckoutEmpty {
+        commit_hash: String,
+
+        #[clap(short = 'p')]
+        path: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
-
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    eprintln!("Logs from your program will appear here!");
 
     match args.command {
         Command::Init => {
@@ -81,8 +86,19 @@ fn main() -> Result<()> {
             commands::write_tree::write_tree_invoke()?;
         }
 
-        Command::CommitTree { tree_hash, parent, message } => {
-            commands::commit_tree::commit_tree_invoke( &tree_hash, parent.as_deref(), &message )?;
+        Command::CommitTree {
+            tree_hash,
+            parent,
+            message,
+        } => {
+            commands::commit_tree::commit_tree_invoke(&tree_hash, parent.as_deref(), &message)?;
+        }
+
+        Command::CheckoutEmpty { commit_hash, path } => {
+            commands::clone::checkout_empty::checkout_empty_invoke(
+                &commit_hash,
+                Path::new(path.as_deref().unwrap_or(".")),
+            )?;
         }
     }
     Ok(())
