@@ -55,6 +55,14 @@ enum Command {
         #[clap(short = 'p')]
         path: Option<String>,
     },
+
+    UnpackObjects {},
+
+    Clone {
+        url: String,
+
+        dir_path: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -62,11 +70,7 @@ fn main() -> Result<()> {
 
     match args.command {
         Command::Init => {
-            fs::create_dir(".git").unwrap();
-            fs::create_dir(".git/objects").unwrap();
-            fs::create_dir(".git/refs").unwrap();
-            fs::write(".git/HEAD", "ref: refs/heads/main\n").unwrap();
-            println!("Initialized git directory")
+            commands::init::init_invoke()?;
         }
 
         Command::CatFile {
@@ -98,6 +102,17 @@ fn main() -> Result<()> {
             commands::clone::checkout_empty::checkout_empty_invoke(
                 &commit_hash,
                 Path::new(path.as_deref().unwrap_or(".")),
+            )?;
+        }
+
+        Command::UnpackObjects {} => {
+            commands::clone::unpack_objects::unpack_objects_invoke();
+        }
+
+        Command::Clone { url, dir_path } => {
+            commands::clone::clone::clone_invoke(
+                &url,
+                Path::new(dir_path.as_deref().unwrap_or(".")),
             )?;
         }
     }
