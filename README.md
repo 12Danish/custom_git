@@ -127,3 +127,5 @@ To extend or modify the project:
 3. Update `Cargo.toml` if additional dependencies are needed.
 4. Run tests with `cargo test`.
 
+
+![Completion Image](https://github.com/12Danish/custom_git/blob/main/completion-img.png)
