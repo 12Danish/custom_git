@@ -16,6 +16,8 @@ pub(crate) enum Kind {
     Blob,
     Tree,
     Commit,
+    RefDelta,
+    Unknown(u8),
 }
 
 impl fmt::Display for Kind {
@@ -24,6 +26,7 @@ impl fmt::Display for Kind {
             Kind::Blob => write!(f, "blob"),
             Kind::Tree => write!(f, "tree"),
             Kind::Commit => write!(f, "commit"),
+            _ => write!(f, "unsupported"),
         }
     }
 }

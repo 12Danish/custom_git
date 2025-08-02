@@ -1,6 +1,5 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -49,15 +48,6 @@ enum Command {
         message: String,
     },
 
-    CheckoutEmpty {
-        commit_hash: String,
-
-        #[clap(short = 'p')]
-        path: Option<String>,
-    },
-
-    UnpackObjects {},
-
     Clone {
         url: String,
 
@@ -96,17 +86,6 @@ fn main() -> Result<()> {
             message,
         } => {
             commands::commit_tree::commit_tree_invoke(&tree_hash, parent.as_deref(), &message)?;
-        }
-
-        Command::CheckoutEmpty { commit_hash, path } => {
-            commands::clone::checkout_empty::checkout_empty_invoke(
-                &commit_hash,
-                Path::new(path.as_deref().unwrap_or(".")),
-            )?;
-        }
-
-        Command::UnpackObjects {} => {
-            commands::clone::unpack_objects::unpack_objects_invoke();
         }
 
         Command::Clone { url, dir_path } => {
